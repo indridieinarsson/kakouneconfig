@@ -54,9 +54,12 @@ hook -group lsp-user-c-family global BufSetOption filetype=(?:c|cpp|objc) %{
 hook -group lsp-user-csharp global BufSetOption filetype=csharp %{
     set-option buffer lsp_language_id csharp
     set-option buffer lsp_servers %{
-        [roslyn]
-        command = "roslyn-language-server"
-        root_globs = ["*.sln", "*.csproj", "global.json", ".git", ".hg"]
+        [csharp]
+        # roslyn-language-server 0.5.0 panics: it looks for a local /tmp/roslyn build.
+        # csharp-language-server already has Microsoft.CodeAnalysis.LanguageServer cached
+        # and speaks stdio, then sends solution/open from the workspace root.
+        command = "csharp-language-server"
+        root_globs = ["*.sln", "*.slnx", "*.csproj", "global.json", ".git", ".hg"]
     }
 }
 

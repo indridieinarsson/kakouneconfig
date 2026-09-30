@@ -63,12 +63,14 @@ C and C++ are not auto-formatted.
 
 ```sh
 dotnet tool install --global csharpier
-cargo install --git https://github.com/SofusA/roslyn-language-server
+cargo install --git https://github.com/SofusA/csharp-language-server
 ```
 
-Needs a .NET SDK. The server is started as `roslyn-language-server` with no
-extra arguments. The filetype is detected here; highlighting reuses the C++
-highlighter.
+Needs a .NET SDK. The server is `csharp-language-server` (stdio). Do not use
+the older `roslyn-language-server` wrapper: it panics looking for a
+`/tmp/roslyn` build and never finishes initializing. The filetype is detected
+here; highlighting reuses the C++ highlighter. Roslyn can take several seconds
+on first open. `gd` before that is parked and retried once the server is up.
 
 ### Typst
 
