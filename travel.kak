@@ -210,3 +210,92 @@ map global object f '<a-semicolon>try %{ lsp-object Function Method }<ret>' -doc
 map global object t '<a-semicolon>try %{ lsp-object Class Interface Module Namespace Struct }<ret>' -docstring 'LSP type'
 map global object d '<a-semicolon>try %{ lsp-diagnostic-object error warning }<ret>' -docstring 'LSP diagnostic'
 map global object D '<a-semicolon>try %{ lsp-diagnostic-object error }<ret>' -docstring 'LSP error'
+
+# Preview the location under the cursor in a *goto* list (gr, and the other
+# LSP location lists). Kakoune has no picker pane; info is the in-terminal popup.
+define-command -override -hidden goto-preview -docstring 'preview the location list entry under the cursor' %@
+    evaluate-commands -save-regs a %{
+        set-register a ''
+        evaluate-commands -draft %{
+            try %{
+                execute-keys x
+                set-register a %val{selection}
+            }
+        }
+        evaluate-commands %sh{
+            line=$(printf '%s' "$kak_reg_a" | tr -d '\r')
+            line=${line%$'\n'}
+            style=above
+            [ "${kak_cursor_line:-1}" -le 8 ] && style=below
+            clear() { printf 'info\n'; exit 0; }
+
+            case $line in
+                *:*) ;;
+                *) clear ;;
+            esac
+            shown=${line%%:*}
+            shown=${shown#"${shown%%[![:space:]]*}"}
+            rest=${line#*:}
+            lineno=${rest%%:*}
+            rest=${rest#*:}
+            col=${rest%%:*}
+            snippet=${rest#*:}
+            file=$shown
+            case $lineno in
+                ''|*[!0-9]*) clear ;;
+            esac
+            case $col in
+                *[!0-9]*) col=1 ;;
+            esac
+            [ -n "$col" ] || col=1
+
+            if [ "$file" = "%" ]; then
+                file=$kak_opt_lsp_buffile
+            elif [ "${file#/}" = "$file" ] && [ -n "$kak_opt_lsp_project_root" ]; then
+                file="${kak_opt_lsp_project_root}${file}"
+            fi
+
+            title="$shown:$lineno:$col"
+            obrace=$(printf '\173')
+            title=$(printf '%s' "$title" | sed -e 's/\\/\\\\/g' -e "s/$obrace/\\\\$obrace/g")
+            q() { printf "'%s'" "$(printf '%s' "$1" | sed "s/'/''/g")"; }
+
+            if [ ! -f "$file" ]; then
+                body="{Information}not on disk
+{\}$snippet"
+                printf 'info -markup -anchor %s.1 -style %s -title %s -- %s\n' \
+                    "$kak_cursor_line" "$style" "$(q "$title")" "$(q "$body")"
+                exit 0
+            fi
+
+            body=$(awk -v target="$lineno" -v above=2 -v below=5 '
+                NR == 1 {
+                    start = target - above
+                    if (start < 1) start = 1
+                    end = target + below
+                }
+                NR >= start && NR <= end {
+                    text = substr($0, 1, 100)
+                    if (length($0) > 100) text = text "…"
+                    if (NR == target)
+                        printf "{Information}> %4d | {\\}%s\n", NR, text
+                    else
+                        printf "{\\}  %4d | %s\n", NR, text
+                }
+                NR > end { exit }
+            ' "$file")
+            [ -n "$body" ] || body="{Information}line $lineno is past the end of the file{\}"
+            printf 'info -markup -anchor %s.1 -style %s -title %s -- %s\n' \
+                "$kak_cursor_line" "$style" "$(q "$title")" "$(q "$body")"
+        }
+    }
+@
+
+hook global WinSetOption filetype=lsp-(?:goto|document-symbol) %{
+    remove-hooks window goto-preview
+    hook window -group goto-preview NormalIdle .* %{ try goto-preview }
+    hook -once -always window WinSetOption filetype=.* %{
+        remove-hooks window goto-preview
+        info
+    }
+}

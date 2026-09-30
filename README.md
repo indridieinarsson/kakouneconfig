@@ -123,7 +123,7 @@ followed by the key.
 | Keys | Action |
 | --- | --- |
 | `gd` | definition |
-| `gr` | references |
+| `gr` | references. In the list, pause on a line for a preview popup |
 | `gy` | type definition |
 | `gI` | implementation |
 | `gs` | document symbol |
