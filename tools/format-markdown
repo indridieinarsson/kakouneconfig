@@ -1,0 +1,8 @@
+#!/bin/sh
+# Match helix: deno fmt - --ext md
+if ! command -v deno >/dev/null 2>&1; then
+    cat
+    exit 0
+fi
+
+exec deno fmt - --ext md

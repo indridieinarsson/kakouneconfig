@@ -1,0 +1,22 @@
+#!/bin/sh
+# Format Python on stdin. Prefer ruff on PATH, then the pylsp pipx venv.
+ruff_bin() {
+    if command -v ruff >/dev/null 2>&1; then
+        command -v ruff
+        return 0
+    fi
+    venv="${HOME}/.local/share/pipx/venvs/python-lsp-server/bin/ruff"
+    if [ -x "$venv" ]; then
+        printf '%s\n' "$venv"
+        return 0
+    fi
+    return 1
+}
+
+bin=$(ruff_bin) || {
+    cat
+    exit 0
+}
+
+name=${1:-${kak_buffile:-stdin.py}}
+exec "$bin" format --stdin-filename "$name" -

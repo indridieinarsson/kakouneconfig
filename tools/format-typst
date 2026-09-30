@@ -1,0 +1,8 @@
+#!/bin/sh
+# Match helix: typstyle --wrap-text, text-width 120.
+if ! command -v typstyle >/dev/null 2>&1; then
+    cat
+    exit 0
+fi
+
+exec typstyle --wrap-text --line-width 120

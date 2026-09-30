@@ -1,0 +1,9 @@
+#!/bin/sh
+# Format C# on stdin with CSharpier. Pass the buffer path so config files apply.
+if ! command -v csharpier >/dev/null 2>&1; then
+    cat
+    exit 0
+fi
+
+name=${1:-${kak_buffile:-stdin.cs}}
+exec csharpier format --write-stdout --log-level None --stdin-path "$name"

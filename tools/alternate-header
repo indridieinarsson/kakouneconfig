@@ -1,0 +1,44 @@
+#!/bin/sh
+# Print the C/C++ counterpart of $1 (same directory, then the git root).
+# Used when clangd's switchSourceHeader is unavailable.
+file=$1
+if [ -z "$file" ] || [ ! -e "$file" ]; then
+    echo 'buffer has no file on disk' >&2
+    exit 1
+fi
+
+dir=$(dirname "$file")
+base=$(basename "$file")
+stem=${base%.*}
+ext=${base##*.}
+
+case $ext in
+    h|hh|hpp|hxx|H|inl|ipp) exts="cpp cc cxx c C mm m" ;;
+    c|cc|cpp|cxx|C|m|mm) exts="h hh hpp hxx H" ;;
+    *)
+        echo 'not a C/C++ source or header' >&2
+        exit 1
+        ;;
+esac
+
+for e in $exts; do
+    cand="$dir/$stem.$e"
+    if [ -f "$cand" ]; then
+        printf '%s\n' "$cand"
+        exit 0
+    fi
+done
+
+root=$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null || printf '%s' "$dir")
+for e in $exts; do
+    match=$(find "$root" \
+        \( -name .git -o -name build -o -name node_modules -o -name target \) -prune \
+        -o -type f -name "$stem.$e" -print -quit)
+    if [ -n "$match" ]; then
+        printf '%s\n' "$match"
+        exit 0
+    fi
+done
+
+echo "no alternate file for $base" >&2
+exit 1

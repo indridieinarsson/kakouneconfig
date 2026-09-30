@@ -1,0 +1,39 @@
+#!/bin/sh
+# Native :lint companion. Kakoune appends a temp file path.
+# LSP diagnostics remain the automatic linter (pylsp + ruff).
+file=$1
+if [ -z "$file" ]; then
+    echo 'lint-python: missing file argument' >&2
+    exit 1
+fi
+
+ruff_bin() {
+    if command -v ruff >/dev/null 2>&1; then
+        command -v ruff
+        return 0
+    fi
+    venv="${HOME}/.local/share/pipx/venvs/python-lsp-server/bin/ruff"
+    if [ -x "$venv" ]; then
+        printf '%s\n' "$venv"
+        return 0
+    fi
+    return 1
+}
+
+bin=$(ruff_bin) || {
+    echo 'ruff is not installed' >&2
+    exit 1
+}
+
+# ruff concise is "path:line:col: CODE message". Rewrite so Kakoune's
+# lint parser sees a kind field (error vs warning).
+"$bin" check --output-format=concise "$file" | awk -F: '
+    NF >= 4 {
+        kind = ($4 ~ /[EF][0-9]/) ? "error" : "warning"
+        msg = $4
+        for (i = 5; i <= NF; i++) msg = msg ":" $i
+        sub(/^ /, "", msg)
+        print $1 ":" $2 ":" $3 ": " kind ": " msg
+    }
+'
+exit 0
