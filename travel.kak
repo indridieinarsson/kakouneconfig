@@ -214,6 +214,7 @@ map global object D '<a-semicolon>try %{ lsp-diagnostic-object error }<ret>' -do
 define-command -override -hidden goto-preview -docstring 'preview the location list entry under the cursor' %@
     evaluate-commands -save-regs a %{
         set-register a ''
+        try %{ execute-keys -draft %{%s<space>┈+$<ret>d} }
         evaluate-commands -draft %{
             try %{
                 execute-keys x
@@ -282,11 +283,23 @@ define-command -override -hidden goto-preview -docstring 'preview the location l
                 exit 0
             fi
 
+            # Dotted leader from the end of the line to the right edge; the popup
+            # anchors at its last cell, so Kakoune shifts it flush right.
+            bytes=$(printf '%s' "$line" | LC_ALL=C wc -c)
+            chars=$(printf '%s' "$line" | LC_ALL=C.UTF-8 wc -m)
+            n=$(( ${kak_window_width:-80} - chars - 20 ))
+            anchorcol=$bytes
+            if [ "$n" -ge 3 ]; then
+                leader=$(printf '%*s' "$n" '' | sed 's/ /┈/g')
+                printf "execute-keys -draft 'gla<space>%s<esc>'\n" "$leader"
+                anchorcol=$(( bytes + 2 + (n - 1) * 3 ))
+            fi
+
             if [ ! -f "$file" ]; then
                 body="{Information}not on disk
 {\}$snippet"
-                printf 'info -markup -anchor %s.1 -style %s -title %s -- %s\n' \
-                    "$kak_cursor_line" "$style" "$(q "$title")" "$(q "$body")"
+                printf 'info -markup -anchor %s.%s -style %s -title %s -- %s\n' \
+                    "$kak_cursor_line" "$anchorcol" "$style" "$(q "$title")" "$(q "$body")"
                 exit 0
             fi
 
@@ -307,8 +320,8 @@ define-command -override -hidden goto-preview -docstring 'preview the location l
                 NR > end { exit }
             ' "$file")
             [ -n "$body" ] || body="{Information}line $lineno is past the end of the file{\}"
-            printf 'info -markup -anchor %s.1 -style %s -title %s -- %s\n' \
-                "$kak_cursor_line" "$style" "$(q "$title")" "$(q "$body")"
+            printf 'info -markup -anchor %s.%s -style %s -title %s -- %s\n' \
+                "$kak_cursor_line" "$anchorcol" "$style" "$(q "$title")" "$(q "$body")"
         }
     }
 @
@@ -319,6 +332,17 @@ hook global WinSetOption filetype=lsp-(?:goto|document-symbol) %{
     hook -once -always window WinSetOption filetype=.* %{
         remove-hooks window goto-preview
         info
-        try %{ evaluate-commands -client preview quit }
+    }
+}
+
+# The window hook above dies with the list's window, so close the split
+# preview whenever any non-preview client shows a buffer that is not a list.
+hook global WinDisplay .* %{
+    evaluate-commands %sh{
+        [ "$kak_client" = preview ] && exit 0
+        case $kak_opt_filetype in lsp-goto|lsp-document-symbol) exit 0 ;; esac
+        case " $kak_client_list " in
+            *" preview "*) printf 'evaluate-commands -client preview quit\n' ;;
+        esac
     }
 }
