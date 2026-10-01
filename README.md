@@ -164,7 +164,7 @@ followed by the key.
 | Keys | Action |
 | --- | --- |
 | `gd` | definition |
-| `gr` | references. In the list, pause on a line for a preview popup |
+| `gr` | references. In the list, pause on a line for a preview: a split pane client when inside tmux or wezterm, else an info popup |
 | `gy` | type definition |
 | `gI` | implementation |
 | `gs` | document symbol |

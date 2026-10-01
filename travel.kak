@@ -225,7 +225,11 @@ define-command -override -hidden goto-preview -docstring 'preview the location l
             line=${line%$'\n'}
             style=above
             [ "${kak_cursor_line:-1}" -le 8 ] && style=below
-            clear() { printf 'info\n'; exit 0; }
+            split=
+            if [ -n "$TMUX" ] && command -v tmux >/dev/null 2>&1; then split=tmux
+            elif [ -n "$WEZTERM_PANE" ] && command -v wezterm >/dev/null 2>&1; then split=wezterm
+            fi
+            clear() { [ -n "$split" ] || printf 'info\n'; exit 0; }
 
             case $line in
                 *:*) ;;
@@ -257,6 +261,26 @@ define-command -override -hidden goto-preview -docstring 'preview the location l
             obrace=$(printf '\173')
             title=$(printf '%s' "$title" | sed -e 's/\\/\\\\/g' -e "s/$obrace/\\\\$obrace/g")
             q() { printf "'%s'" "$(printf '%s' "$1" | sed "s/'/''/g")"; }
+
+            if [ -n "$split" ]; then
+                [ -f "$file" ] || exit 0
+                kcmd="edit -existing $(q "$file") $lineno $col; execute-keys xvc"
+                case " $kak_client_list " in
+                    *" preview "*)
+                        printf 'evaluate-commands -client preview %s\n' "$(q "$kcmd")"
+                        ;;
+                    *)
+                        init="rename-client preview; $kcmd"
+                        if [ "$split" = tmux ]; then
+                            tmux split-window -d -h -l 45% kak -c "$kak_session" -e "$init" >/dev/null 2>&1
+                        else
+                            wezterm cli split-pane --right --percent 45 -- kak -c "$kak_session" -e "$init" >/dev/null 2>&1
+                            wezterm cli activate-pane --pane-id "$WEZTERM_PANE" >/dev/null 2>&1
+                        fi
+                        ;;
+                esac
+                exit 0
+            fi
 
             if [ ! -f "$file" ]; then
                 body="{Information}not on disk
@@ -295,5 +319,6 @@ hook global WinSetOption filetype=lsp-(?:goto|document-symbol) %{
     hook -once -always window WinSetOption filetype=.* %{
         remove-hooks window goto-preview
         info
+        try %{ evaluate-commands -client preview quit }
     }
 }
