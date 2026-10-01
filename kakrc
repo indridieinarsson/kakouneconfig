@@ -12,7 +12,7 @@
 #     <c-n>/<c-p> next/previous git hunk
 #   user (<space>)
 #     l LSP menu        h hover            = format
-#     f or e open file  b pick buffer      ,/. prev/next buffer    q close
+#     f fzf file, e open file  b fzf buffer      ,/. prev/next buffer    q close
 #     / or @ grep word  * / # search word  B git blame
 #     i diagnostic display (c inline, e end-of-line, o gutter flags)
 #     L external :lint
@@ -23,6 +23,7 @@
 source "%val{config}/travel.kak"
 source "%val{config}/format.kak"
 source "%val{config}/lsp.kak"
+source "%val{config}/fzf.kak"
 
 # Relative numbers, cursor line number, column 120 ruler.
 add-highlighter global/numbers number-lines -relative -hlcursor -separator ' ' -min-digits 2
