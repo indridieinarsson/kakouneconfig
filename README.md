@@ -24,11 +24,52 @@ Put these on `PATH`:
 | `kak-lsp` | language servers, diagnostics, hover, rename |
 | `git` | branch in the modeline, diff gutter, hunks, blame, project root |
 | `rg` | `:grep`, project file picker |
+| `fzf` | fuzzy pickers (`<space>f`, `<space>b`, `<space>F`) |
+| `kak-tree-sitter` + `ktsctl` | optional; syntax highlighting and tree-sitter text objects |
+| `cc` (gcc/clang) and `git` | `ktsctl` uses them to build tree-sitter grammars |
 
 ```sh
 # openSUSE, if any of these are missing
 sudo zypper install kak-lsp ripgrep git
 ```
+
+### Syntax highlighting (kak-tree-sitter)
+
+Highlighting and text objects come from `kak-tree-sitter` (`treesitter.kak`),
+which starts a daemon from the Kakoune session. Kakoune still starts without
+it; C# then falls back to the C++ highlighter and other languages use
+Kakoune's built-in ones.
+
+Installing the binaries is not enough. Each language needs a grammar and
+highlight queries, which `ktsctl` downloads and compiles. Without them the
+buffer is uncoloured (all white), with no error. Needs network access, `git`
+and a C compiler.
+
+```sh
+cargo install kak-tree-sitter ktsctl   # puts both in ~/.cargo/bin
+
+# once per language; re-run to update. `ktsctl query -a` lists all languages.
+ktsctl sync python csharp markdown rust c cpp bash json toml
+ktsctl query python                    # check "Install stats" at the bottom
+```
+
+The `kak-tree-sitter` daemon is shared by all sessions and reads grammars
+only when it starts. After installing or changing a grammar, stop it, or
+the buffer stays uncoloured even in a freshly started Kakoune:
+
+```sh
+pkill kak-tree-sitter   # the next Kakoune start launches a new one
+```
+
+Per-language overrides live in `~/.config/kak-tree-sitter/config.toml`, which
+is outside this directory. It sets `remove_default_highlighter = true` for
+Python and registers the C# grammar under the name `c-sharp`, because the
+default entry symbol lookup fails for `csharp`. Copy it to a new machine
+along with this directory. After editing it, run `ktsctl sync <lang>` again.
+
+The colorscheme is `modus-vivendi`, loaded from the `colors/` symlink
+(kakoune-themes). A scheme that defines no `ts_*` faces shows no colour even
+when tree-sitter works.
 
 ### Python
 
@@ -148,8 +189,9 @@ Insert mode keeps `<c-n>` for completion.
 | `l` | kak-lsp menu |
 | `h` | hover |
 | `=` | format (`formatcmd`, otherwise the language server) |
-| `f` or `e` | open a project file |
-| `b` | pick a buffer |
+| `f` | fzf: fuzzy-find a project file |
+| `e` | open a project file |
+| `b` | fzf: fuzzy-switch buffer |
 | `,` / `.` | previous / next buffer |
 | `q` | close buffer |
 | `/` or `@` | project-search the selection, or the word at the cursor |
@@ -157,6 +199,8 @@ Insert mode keeps `<c-n>` for completion.
 | `B` | toggle git blame |
 | `L` | external `:lint` (Python: `ruff check`) |
 | `i` | diagnostic display menu |
+| `t` | tree-sitter menu (see below) |
+| `F` | fzf mode, every picker |
 
 `<space>ic`, `<space>ie`, and `<space>io` toggle inline highlights,
 end-of-line text, and gutter flags.
@@ -182,15 +226,40 @@ These keys belong to kak-lsp. The prompt lists them too.
 
 ### Text objects
 
-Use them like other objects: `il` is inner, `al` is around.
+Use them like other objects: `if` is inner, `af` is around.
 
 | Object | Selects |
 | --- | --- |
+| `f` | function (tree-sitter) |
+| `t` | class or type (tree-sitter) |
+| `a` | argument or parameter (tree-sitter) |
+| `T` | test (tree-sitter) |
 | `l` | LSP symbol |
-| `f` | function or method |
-| `t` | class, interface, module, namespace, or struct |
-| `d` | error or warning |
-| `D` | error |
+| `d` | LSP error or warning |
+| `D` | LSP error |
+
+kak-tree-sitter loads after `travel.kak`, so when it is running its `f` and
+`t` replace the LSP versions (functions and methods; classes, interfaces,
+modules, namespaces, structs). Without it the LSP versions stay.
+
+### Tree-sitter menu (`<space>t`)
+
+Needs `kak-tree-sitter` and an installed grammar for the language.
+
+| Keys | Action |
+| --- | --- |
+| `s` | select parent node |
+| `t` / `<c-t>` | select first / last child |
+| `c` / `r` | select previous / next sibling |
+| `C` / `R` | previous / next sibling, crossing parents (cousin) |
+| `(` / `)` | first / last sibling |
+| `T` | sticky navigation: stay in the mode while moving |
+| `k` | select the nearest function, parameter, class, or test |
+| `f` / `<a-f>` | jump to next / previous function, parameter, class, or test; `F` / `<a-F>` extend the selection |
+| `/` / `<a-/>` | search next / previous object; `?` / `<a-?>` extend |
+
+After `f`, `/` and so on, a second key picks the kind: `f` function,
+`a` parameter, `t` class, `T` test (`c` comment for `/`).
 
 ## Not remapped
 

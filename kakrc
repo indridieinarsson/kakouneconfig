@@ -22,8 +22,11 @@
 
 source "%val{config}/travel.kak"
 source "%val{config}/format.kak"
+source "%val{config}/treesitter.kak"
 source "%val{config}/lsp.kak"
 source "%val{config}/fzf.kak"
+
+colorscheme modus-vivendi
 
 # Relative numbers, cursor line number, column 120 ruler.
 add-highlighter global/numbers number-lines -relative -hlcursor -separator ' ' -min-digits 2
@@ -49,6 +52,8 @@ hook global BufCreate .*\.cs$ %{
     set-option buffer filetype csharp
 }
 hook global WinSetOption filetype=csharp %{
+    # kak-tree-sitter has a real C# grammar; only fall back when it is absent.
+    evaluate-commands %sh{ [ "$kak_opt_kts_loaded" = true ] && echo fail }
     require-module cpp
     try %{ remove-highlighter window/csharp }
     add-highlighter window/csharp ref cpp
