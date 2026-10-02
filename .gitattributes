@@ -1,0 +1,5 @@
+# This repo is edited from both WSL and Windows. Kakoune does not treat a
+# carriage return as whitespace, so a CRLF kakrc fails to parse at its first
+# non-comment line with "'': no such command" -- and a source failure aborts
+# the whole file. Normalise to LF in the index and on checkout.
+* text=auto eol=lf

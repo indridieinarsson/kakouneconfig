@@ -1,0 +1,25 @@
+# Machine-local, not synced. Both of these are bootstrapped per machine.
+
+# Plugins. plug.kak and fzf.kak each carry their own .git directory, so
+# committing them here would either drop their contents or require
+# submodules -- and the result would look synced while failing to load on
+# the other machine.
+#   git clone https://github.com/andreyorst/plug.kak plugins/plug.kak
+#   then run :plug-install inside Kakoune
+plugins/
+
+# Colourschemes. This is a symlink to a clone of a third-party repo, so the
+# committed entry would be an absolute path that does not exist elsewhere
+# (and Windows checkouts turn symlinks into plain text files).
+#   git clone https://github.com/anhsirk0/kakoune-themes \
+#       ~/.local/share/kakoune-themes
+#   ln -s ~/.local/share/kakoune-themes/colors ~/.config/kak/colors
+colors
+
+# Kakoune debug buffer dumps.
+errormsg
+
+# Editor swap and backup files.
+*.swp
+*.swo
+*~
