@@ -212,9 +212,12 @@ map global object D '<a-semicolon>try %{ lsp-diagnostic-object error }<ret>' -do
 # Filetypes of buffers whose lines are `file:line:col:text` locations: the LSP
 # location lists and the *grep* buffer (grep-word and friends).
 declare-option -hidden str goto_preview_filetypes 'lsp-goto|lsp-document-symbol|grep'
+declare-option -hidden bool goto_preview_paused false
 
-# Preview the location under the cursor in such a list. Kakoune has no picker pane; info is the in-terminal popup.
+# Preview the location under the cursor in such a list: in a split client
+# (zellij, tmux, wezterm) when there is one, else an info popup.
 define-command -override -hidden goto-preview -docstring 'preview the location list entry under the cursor' %@
+    evaluate-commands %sh{ [ "$kak_opt_goto_preview_paused" = true ] && echo "fail 'preview paused'" }
     evaluate-commands -save-regs a %{
         set-register a ''
         try %{ execute-keys -draft %{%s<space>┈+$<ret>d} }
@@ -230,41 +233,17 @@ define-command -override -hidden goto-preview -docstring 'preview the location l
             style=above
             [ "${kak_cursor_line:-1}" -le 8 ] && style=below
             split=
-            if [ -n "$TMUX" ] && command -v tmux >/dev/null 2>&1; then split=tmux
+            if [ -n "$kak_client_env_ZELLIJ_SESSION_NAME" ] && [ "$kak_opt_fzf_zellij_session" != off ]; then split=zellij
+            elif [ -n "$TMUX" ] && command -v tmux >/dev/null 2>&1; then split=tmux
             elif [ -n "$WEZTERM_PANE" ] && command -v wezterm >/dev/null 2>&1; then split=wezterm
             fi
             clear() { [ -n "$split" ] || printf 'info\n'; exit 0; }
 
-            case $line in
-                *:*) ;;
-                *) clear ;;
-            esac
-            shown=${line%%:*}
-            shown=${shown#"${shown%%[![:space:]]*}"}
-            rest=${line#*:}
-            lineno=${rest%%:*}
-            rest=${rest#*:}
-            col=${rest%%:*}
-            snippet=${rest#*:}
-            file=$shown
-            case $lineno in
-                ''|*[!0-9]*) clear ;;
-            esac
-            case $col in
-                *[!0-9]*) col=1 ;;
-            esac
-            [ -n "$col" ] || col=1
-
-            if [ "$file" = "%" ]; then
-                file=$kak_opt_lsp_buffile
-            elif [ "${file#/}" = "$file" ] && [ -f "${kak_opt_lsp_project_root}${file}" ]; then
-                file="${kak_opt_lsp_project_root}${file}"
-            fi
+            . "$kak_config/tools/goto-location.sh" || clear
 
             title="$shown:$lineno:$col"
             obrace=$(printf '\173')
             title=$(printf '%s' "$title" | sed -e 's/\\/\\\\/g' -e "s/$obrace/\\\\$obrace/g")
-            q() { printf "'%s'" "$(printf '%s' "$1" | sed "s/'/''/g")"; }
 
             if [ -n "$split" ]; then
                 [ -f "$file" ] || exit 0
@@ -275,7 +254,10 @@ define-command -override -hidden goto-preview -docstring 'preview the location l
                         ;;
                     *)
                         init="rename-client preview; $kcmd"
-                        if [ "$split" = tmux ]; then
+                        if [ "$split" = zellij ]; then
+                            printf 'try %%{ zellij-pane -b -n preview -x 45%% -y 15%% -w 45%% -h 70%% -- kak -c %s -e %s }\n' \
+                                "$(q "$kak_session")" "$(q "$init")"
+                        elif [ "$split" = tmux ]; then
                             tmux split-window -d -h -l 45% kak -c "$kak_session" -e "$init" >/dev/null 2>&1
                         else
                             wezterm cli split-pane --right --percent 45 -- kak -c "$kak_session" -e "$init" >/dev/null 2>&1
@@ -306,22 +288,7 @@ define-command -override -hidden goto-preview -docstring 'preview the location l
                 exit 0
             fi
 
-            body=$(awk -v target="$lineno" -v above=2 -v below=5 '
-                NR == 1 {
-                    start = target - above
-                    if (start < 1) start = 1
-                    end = target + below
-                }
-                NR >= start && NR <= end {
-                    text = substr($0, 1, 100)
-                    if (length($0) > 100) text = text "…"
-                    if (NR == target)
-                        printf "{Information}> %4d | {\\}%s\n", NR, text
-                    else
-                        printf "{\\}  %4d | %s\n", NR, text
-                }
-                NR > end { exit }
-            ' "$file")
+            body=$("$kak_config/tools/goto-context" "$file" "$lineno" 2 5)
             [ -n "$body" ] || body="{Information}line $lineno is past the end of the file{\}"
             printf 'info -markup -anchor %s.%s -style %s -title %s -- %s\n' \
                 "$kak_cursor_line" "$anchorcol" "$style" "$(q "$title")" "$(q "$body")"
@@ -329,7 +296,8 @@ define-command -override -hidden goto-preview -docstring 'preview the location l
     }
 @
 
-hook global WinSetOption "filetype=(?:%opt{goto_preview_filetypes})" %{
+# Hook up the in-buffer preview for the current list window.
+define-command -override -hidden goto-preview-enable -docstring 'preview list entries as the cursor pauses on them' %{
     remove-hooks window goto-preview
     hook window -group goto-preview NormalIdle .* %{ try goto-preview }
     hook -once -always window WinSetOption filetype=.* %{
@@ -338,11 +306,80 @@ hook global WinSetOption "filetype=(?:%opt{goto_preview_filetypes})" %{
     }
 }
 
+# Under zellij the list moves into two floating panes: the list itself on the
+# left (a Kakoune client named "picker") and the preview on the right (the
+# "preview" client that goto-preview drives). Jumps still land in this client.
+define-command -override -hidden goto-picker -docstring 'show the location list in a zellij popup' %{
+    zellij-pane -n picker -x 5% -y 15% -w 38% -h 70% -- kak -c %val{session} -e "
+        rename-client picker
+        buffer %val{bufname}
+        set-option window jumpclient %val{client}
+        goto-picker-setup
+    "
+    try %{ buffer %opt{goto_return_buffer} }
+}
+
+define-command -override -hidden goto-picker-setup -docstring 'configure the picker client' %{
+    set-option window goto_preview_paused false
+    goto-preview-enable
+    map window normal q ': goto-picker-close<ret>' -docstring 'close picker'
+    map window normal <esc> ': goto-picker-close<ret>' -docstring 'close picker'
+    # Entering a result jumps (the list's own hook); then the popup is done.
+    hook window NormalKey <ret> %{ set-option window goto_preview_paused true; hook -once window NormalIdle .* goto-picker-close }
+}
+
+define-command -override -hidden goto-picker-close -docstring 'close the picker and its preview' %{
+    set-option window goto_preview_paused true
+    try %{ evaluate-commands -client preview quit }
+    quit!
+}
+
+# The buffer a list was opened from, so the picker can put it back on screen.
+declare-option -hidden str goto_return_buffer
+hook global WinDisplay '[^*].*' %{
+    evaluate-commands %sh{
+        case $kak_client in preview|picker) exit 0 ;; esac
+        echo 'set-option global goto_return_buffer %val{bufname}'
+    }
+}
+
+define-command -override -hidden goto-picker-arm -docstring 'open the picker once the grep fifo is complete' %{
+    remove-hooks buffer goto-picker-arm
+    hook -once -group goto-picker-arm buffer BufCloseFifo .* %{
+        evaluate-commands %sh{
+            for c in $kak_client_list; do
+                case $c in preview|picker) ;; *) { echo "evaluate-commands -client $c %{ try %{ zellij-pane --check; goto-picker } }"; break; } ;; esac
+            done
+        }
+    }
+}
+
+# Re-running grep reuses the buffer without changing its filetype, so arm again here.
+hook global BufOpenFifo '\*grep\*' goto-picker-arm
+
+hook global WinSetOption "filetype=(?:%opt{goto_preview_filetypes})" %{
+    remove-hooks window goto-preview
+    # Under zellij, use the picker instead of navigating the list buffer;
+    # zellij-pane --check fails otherwise, falling back to the in-buffer preview.
+    try %{
+        zellij-pane --check
+        # *grep* fills asynchronously from a fifo; other lists are ready once idle.
+        try %{
+            evaluate-commands %sh{ [ "$kak_opt_filetype" = grep ] || echo fail }
+            goto-picker-arm
+        } catch %{
+            hook -once window NormalIdle .* goto-picker
+        }
+    } catch %{
+        goto-preview-enable
+    }
+}
+
 # The window hook above dies with the list's window, so close the split
 # preview whenever any non-preview client shows a buffer that is not a list.
 hook global WinDisplay .* %{
     evaluate-commands %sh{
-        [ "$kak_client" = preview ] && exit 0
+        case $kak_client in preview|picker) exit 0 ;; esac
         printf '%s' "$kak_opt_filetype" | grep -qxE "$kak_opt_goto_preview_filetypes" && exit 0
         case " $kak_client_list " in
             *" preview "*) printf 'evaluate-commands -client preview quit\n' ;;

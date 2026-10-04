@@ -164,7 +164,7 @@ followed by the key.
 | Keys | Action |
 | --- | --- |
 | `gd` | definition |
-| `gr` | references. In the list, pause on a line for a preview: a split pane client when inside tmux or wezterm, else an info popup. The same preview works in `:grep` results (`<space>/`, `<space>@`) |
+| `gr` | references. In the list, pause on a line for a preview: a split pane client when inside tmux or wezterm, else an info popup. The same preview works in `:grep` results (`<space>/`, `<space>@`). Under zellij, both open two centred floating panes instead: the plain list on the left (j/k, Enter jumps, q/Esc closes) and the preview on the right |
 | `gy` | type definition |
 | `gI` | implementation |
 | `gs` | document symbol |

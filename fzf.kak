@@ -36,55 +36,21 @@ define-command -hidden -params 1 fzf-wezterm-split %{
     }
 }
 
-# Two topologies are supported:
-#
-#   * zellij running natively in Linux -- the script runs directly in the pane.
-#
-#   * zellij running on the Windows side with panes that re-enter WSL (a
-#     default_shell of ubuntu.cmd, i.e. wsl.exe). There the Linux `zellij`
-#     binary is a *different installation* that cannot see or control the
-#     Windows sessions at all, so `zellij.exe` has to be driven instead, and
-#     the pane command must go back through wsl.exe to reach the script.
-#     That also needs ubuntu.cmd to forward ZELLIJ_SESSION_NAME via WSLENV,
-#     otherwise nothing in WSL can tell which session it belongs to.
-#
-# Whichever binary actually knows the session wins, so this self-configures.
-define-command -hidden -params 1 fzf-zellij-terminal %{
+# Open a command in a floating zellij pane; arguments as for tools/zellij-pane
+# (`zellij-pane --check` just tests that zellij is usable). Fails if it is not.
+# The shell refers to the variables the script reads, so Kakoune exports them.
+define-command -hidden -params 1.. zellij-pane %{
     evaluate-commands %sh{
-        script="$1"                 # save before the helper shadows $1
-        session="${kak_opt_fzf_zellij_session}"
-        case "$session" in
-            off|'') session= ;;
-            auto)   session="${kak_client_env_ZELLIJ_SESSION_NAME:-}" ;;
-        esac
+        : "$kak_client_env_ZELLIJ_SESSION_NAME" "$kak_opt_fzf_zellij_session"
+        "$kak_config/tools/zellij-pane" "$@" || echo "fail 'no usable zellij session'"
+    }
+}
 
-        # Does zellij binary $1 report $2 as a live (non-exited) session?
-        knows() {
-            command -v "$1" >/dev/null 2>&1 || return 1
-            "$1" list-sessions --no-formatting 2>/dev/null \
-                | grep -v '(EXITED' | awk 'NF {print $1}' | grep -qxF "$2"
-        }
-
-        if [ -z "$session" ]; then
-            printf 'fzf-wezterm-split %%{%s}\n' "$script"
-        elif knows zellij "$session"; then
-            zellij --session "$session" run \
-                --floating --close-on-exit --name fzf \
-                --width "${kak_opt_fzf_zellij_width}" \
-                --height "${kak_opt_fzf_zellij_height}" \
-                -- "$script" </dev/null >/dev/null 2>&1
-        elif knows zellij.exe "$session"; then
-            zellij.exe --session "$session" run \
-                --floating --close-on-exit --name fzf \
-                --width "${kak_opt_fzf_zellij_width}" \
-                --height "${kak_opt_fzf_zellij_height}" \
-                -- wsl.exe -d "${WSL_DISTRO_NAME:-Ubuntu}" -- "$script" \
-                </dev/null >/dev/null 2>&1
-        else
-            # No zellij session we can address (and not tmux, which fzf.kak
-            # handles itself): wezterm split if in wezterm, else a separate terminal window.
-            printf 'fzf-wezterm-split %%{%s}\n' "$script"
-        fi
+define-command -hidden -params 1 fzf-zellij-terminal %{
+    try %{
+        zellij-pane -n fzf -w %opt{fzf_zellij_width} -h %opt{fzf_zellij_height} -- %arg{1}
+    } catch %{
+        fzf-wezterm-split %arg{1}
     }
 }
 
