@@ -26,7 +26,7 @@ source "%val{config}/treesitter.kak"
 source "%val{config}/lsp.kak"
 source "%val{config}/fzf.kak"
 
-colorscheme modus-vivendi
+colorscheme modus-vivendi-tinted
 
 # Relative numbers, cursor line number, column 120 ruler.
 add-highlighter global/numbers number-lines -relative -hlcursor -separator ' ' -min-digits 2

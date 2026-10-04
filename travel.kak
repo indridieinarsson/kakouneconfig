@@ -209,8 +209,11 @@ map global object t '<a-semicolon>try %{ lsp-object Class Interface Module Names
 map global object d '<a-semicolon>try %{ lsp-diagnostic-object error warning }<ret>' -docstring 'LSP diagnostic'
 map global object D '<a-semicolon>try %{ lsp-diagnostic-object error }<ret>' -docstring 'LSP error'
 
-# Preview the location under the cursor in a *goto* list (gr, and the other
-# LSP location lists). Kakoune has no picker pane; info is the in-terminal popup.
+# Filetypes of buffers whose lines are `file:line:col:text` locations: the LSP
+# location lists and the *grep* buffer (grep-word and friends).
+declare-option -hidden str goto_preview_filetypes 'lsp-goto|lsp-document-symbol|grep'
+
+# Preview the location under the cursor in such a list. Kakoune has no picker pane; info is the in-terminal popup.
 define-command -override -hidden goto-preview -docstring 'preview the location list entry under the cursor' %@
     evaluate-commands -save-regs a %{
         set-register a ''
@@ -254,7 +257,7 @@ define-command -override -hidden goto-preview -docstring 'preview the location l
 
             if [ "$file" = "%" ]; then
                 file=$kak_opt_lsp_buffile
-            elif [ "${file#/}" = "$file" ] && [ -n "$kak_opt_lsp_project_root" ]; then
+            elif [ "${file#/}" = "$file" ] && [ -f "${kak_opt_lsp_project_root}${file}" ]; then
                 file="${kak_opt_lsp_project_root}${file}"
             fi
 
@@ -326,7 +329,7 @@ define-command -override -hidden goto-preview -docstring 'preview the location l
     }
 @
 
-hook global WinSetOption filetype=lsp-(?:goto|document-symbol) %{
+hook global WinSetOption "filetype=(?:%opt{goto_preview_filetypes})" %{
     remove-hooks window goto-preview
     hook window -group goto-preview NormalIdle .* %{ try goto-preview }
     hook -once -always window WinSetOption filetype=.* %{
@@ -340,7 +343,7 @@ hook global WinSetOption filetype=lsp-(?:goto|document-symbol) %{
 hook global WinDisplay .* %{
     evaluate-commands %sh{
         [ "$kak_client" = preview ] && exit 0
-        case $kak_opt_filetype in lsp-goto|lsp-document-symbol) exit 0 ;; esac
+        printf '%s' "$kak_opt_filetype" | grep -qxE "$kak_opt_goto_preview_filetypes" && exit 0
         case " $kak_client_list " in
             *" preview "*) printf 'evaluate-commands -client preview quit\n' ;;
         esac
