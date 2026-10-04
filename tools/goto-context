@@ -1,0 +1,21 @@
+#!/bin/sh
+# goto-context FILE LINE ABOVE BELOW
+# Print the lines around LINE of FILE, numbered, as Kakoune info markup with
+# the target line marked.
+awk -v target="$2" -v above="$3" -v below="$4" '
+    BEGIN {
+        start = target - above
+        if (start < 1) start = 1
+        end = target + below
+    }
+    NR >= start && NR <= end {
+        text = substr($0, 1, 100)
+        if (length($0) > 100) text = text "…"
+        if (NR == target) {
+            printf "{Information}> %4d | {\\}%s\n", NR, text
+        } else {
+            printf "{\\}  %4d | %s\n", NR, text
+        }
+    }
+    NR > end { exit }
+' "$1"

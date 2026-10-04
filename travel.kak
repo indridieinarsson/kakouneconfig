@@ -209,6 +209,17 @@ map global object t '<a-semicolon>try %{ lsp-object Class Interface Module Names
 map global object d '<a-semicolon>try %{ lsp-diagnostic-object error warning }<ret>' -docstring 'LSP diagnostic'
 map global object D '<a-semicolon>try %{ lsp-diagnostic-object error }<ret>' -docstring 'LSP error'
 
+# Skerpa á því að Alt+Shift+, keyri sömu skipun og Alt+;
+# Búa til nýjan ham fyrir akkeri
+declare-user-mode anchor
+map global anchor f '<a-;>' -docstring 'Flip cursor and anchor'
+map global anchor c ';'     -docstring 'Reduce selection to cursor'
+
+# Notaðu semíkommu (ásamt Shift+,) til að opna haminn
+map global normal <a-h> ': enter-user-mode anchor<ret>'
+
+
+
 # Filetypes of buffers whose lines are `file:line:col:text` locations: the LSP
 # location lists and the *grep* buffer (grep-word and friends).
 declare-option -hidden str goto_preview_filetypes 'lsp-goto|lsp-document-symbol|grep'

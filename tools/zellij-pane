@@ -1,0 +1,66 @@
+#!/bin/sh
+# zellij-pane --check
+# zellij-pane [-b] [-n NAME] [-x X] [-y Y] [-w WIDTH] [-h HEIGHT] -- COMMAND...
+# Open COMMAND in a floating pane of the zellij session this Kakoune belongs
+# to; --check only tests that such a session is usable. Exits 1 if not.
+# -b hands focus back to the previously focused pane once the new one is up.
+# Reads kak_opt_fzf_zellij_session and kak_client_env_ZELLIJ_SESSION_NAME
+# (both set when called from a Kakoune %sh block).
+#
+# Two topologies are supported:
+#
+#   * zellij running natively in Linux -- COMMAND runs directly in the pane.
+#
+#   * zellij running on the Windows side with panes that re-enter WSL (a
+#     default_shell of ubuntu.cmd, i.e. wsl.exe). There the Linux `zellij`
+#     binary is a *different installation* that cannot see or control the
+#     Windows sessions at all, so `zellij.exe` has to be driven instead, and
+#     the pane command must go back through wsl.exe to reach COMMAND.
+#     That also needs ubuntu.cmd to forward ZELLIJ_SESSION_NAME via WSLENV,
+#     otherwise nothing in WSL can tell which session it belongs to.
+#
+# Whichever binary actually knows the session wins, so this self-configures.
+session="${kak_opt_fzf_zellij_session:-auto}"
+case "$session" in
+    off|'') exit 1 ;;
+    auto)   session="${kak_client_env_ZELLIJ_SESSION_NAME:-}" ;;
+esac
+[ -n "$session" ] || exit 1
+
+# Does zellij binary $1 report $session as a live (non-exited) session?
+knows() {
+    command -v "$1" >/dev/null 2>&1 || return 1
+    "$1" list-sessions --no-formatting 2>/dev/null \
+        | grep -v '(EXITED' | awk 'NF {print $1}' | grep -qxF "$session"
+}
+if knows zellij; then bin=zellij; wsl=
+elif knows zellij.exe; then bin=zellij.exe; wsl=1
+else exit 1
+fi
+
+name=pane
+geometry=
+back=
+while [ $# -gt 0 ]; do
+    case $1 in
+        --check) exit 0 ;;
+        -b) back=1; shift ;;
+        -n) name=$2; shift 2 ;;
+        -x) geometry="$geometry --x $2"; shift 2 ;;
+        -y) geometry="$geometry --y $2"; shift 2 ;;
+        -w) geometry="$geometry --width $2"; shift 2 ;;
+        -h) geometry="$geometry --height $2"; shift 2 ;;
+        --) shift; break ;;
+        *) exit 2 ;;
+    esac
+done
+[ $# -gt 0 ] || exit 2
+[ -z "$wsl" ] || set -- wsl.exe -d "${WSL_DISTRO_NAME:-Ubuntu}" -- "$@"
+
+# shellcheck disable=SC2086 # geometry is a flag list, split on purpose
+"$bin" --session "$session" run --floating --close-on-exit --name "$name" \
+    $geometry -- "$@" </dev/null >/dev/null 2>&1 || exit 1
+if [ -n "$back" ]; then
+    sleep 0.3
+    "$bin" --session "$session" action focus-last-pane >/dev/null 2>&1
+fi
