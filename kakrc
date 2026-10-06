@@ -20,6 +20,11 @@
 # Left alone on purpose: x and <a-x> (line bounds), <a-.> (repeat motion),
 # <a-,> (drop main selection), @ (tabs to spaces), * (search from selection).
 
+# Kakoune normally identifies .m files as Objective-C.
+hook global BufCreate .*\.m$ %{
+    set-option buffer filetype matlab
+}
+
 source "%val{config}/travel.kak"
 source "%val{config}/format.kak"
 source "%val{config}/treesitter.kak"
