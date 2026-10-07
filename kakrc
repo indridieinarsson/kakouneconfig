@@ -31,6 +31,14 @@ source "%val{config}/treesitter.kak"
 source "%val{config}/lsp.kak"
 source "%val{config}/fzf.kak"
 
+plug "h-youhei/kakoune-surround" %{
+    # The plugin automatically binds `ms`, `mr`, and `md` by default
+    map global user s ': surround<ret>' -docstring 'surround'
+
+}
+map global normal <a-8> '<a-(>'
+map global normal <a-9> '<a-)>'
+
 colorscheme modus-vivendi-tinted
 
 # Relative numbers, cursor line number, column 120 ruler.
