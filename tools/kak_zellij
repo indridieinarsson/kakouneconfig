@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# kak-zellij: wrapper around kak that ties the Kakoune session to the Zellij session.
+#
+# Install: save as ~/.local/bin/kak-zellij, chmod +x it, and optionally
+#   alias kak='kak-zellij'
+
+# Not inside Zellij: run kak directly.
+if [[ -z "${ZELLIJ:-}" || -z "${ZELLIJ_SESSION_NAME:-}" ]]; then
+    exec kak "$@"
+fi
+
+session="$ZELLIJ_SESSION_NAME"
+
+# Kakoune session names can't contain whitespace or some special characters, so sanitize.
+session="${session//[^A-Za-z0-9._-]/_}"
+
+# If a Kakoune session with this name already exists, connect to it.
+if kak -l 2>/dev/null | grep -Fxq -- "$session"; then
+    exec kak -c "$session" "$@"
+fi
+
+# Otherwise create it (-s names the new session and starts a server).
+exec kak -s "$session" "$@"
