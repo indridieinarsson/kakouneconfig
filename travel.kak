@@ -15,8 +15,63 @@ define-command -override code-type-definition -docstring 'jump to type definitio
 define-command -override code-implementation -docstring 'jump to implementation' %{
     try %{ lsp-implementation } catch %{ fail 'implementation jump needs kak-lsp' }
 }
-define-command -override code-symbols -docstring 'jump to a symbol in this buffer' %{
-    try %{ lsp-goto-document-symbol } catch %{ fail 'document symbols need kak-lsp' }
+# Document symbols in fzf. kak-lsp only offers them as a *goto* buffer, so the
+# request is flagged as pending and BufSetOption lsp_buffile (the last thing
+# kak-lsp sets while rendering that buffer, after the text is pasted) hands the
+# text to fzf instead.
+declare-option -hidden bool symbol_picker_pending false
+declare-option -hidden str symbol_picker_client
+declare-option -hidden str symbol_picker_buffer
+declare-option -hidden str symbol_picker_file
+
+define-command -override code-symbols -docstring 'fuzzy-pick a symbol in this buffer' %{
+    evaluate-commands %sh{
+        if command -v fzf >/dev/null 2>&1; then
+            echo symbol-picker-start
+        else
+            echo 'try %{ lsp-goto-document-symbol } catch %{ fail "document symbols need kak-lsp" }'
+        fi
+    }
+}
+
+define-command -override -hidden symbol-picker-start %{
+    set-option global symbol_picker_client %val{client}
+    set-option global symbol_picker_buffer %val{bufname}
+    set-option global symbol_picker_pending true
+    # Drop the flag if the server never answers, so a later plain
+    # :lsp-document-symbol is not hijacked.
+    nop %sh{ ( sleep 10; printf 'set-option global symbol_picker_pending false\n' | kak -p "$kak_session" ) >/dev/null 2>&1 & }
+    try %{ lsp-document-symbol } catch %{
+        set-option global symbol_picker_pending false
+        fail 'document symbols need kak-lsp'
+    }
+}
+
+define-command -override -hidden symbol-picker-open %{
+    set-option global symbol_picker_pending false
+    set-option global symbol_picker_file %sh{ mktemp "${TMPDIR:-/tmp}/kak-symbols.XXXXXX" }
+    write -force %opt{symbol_picker_file}
+    evaluate-commands -client %opt{symbol_picker_client} %{
+        try %{ buffer %opt{symbol_picker_buffer} }
+        evaluate-commands %sh{
+            f=$kak_opt_symbol_picker_file
+            # Lines are `%:line:col: name (Kind)`; show only the text, jump by line.col.
+            printf '%s\n' "fzf -kak-cmd symbol-picker-jump -items-cmd %{{ cat '$f'; rm -f '$f'; }} -fzf-args %{--delimiter=: --with-nth=4.. --tiebreak=index} -filter %{sed -E 's/^[[:space:]]*%:([0-9]+):([0-9]+):.*/\1.\2/'}"
+        }
+    }
+    try %{ delete-buffer! *goto* }
+}
+
+define-command -override -hidden -params 1 symbol-picker-jump %{
+    try %{ buffer %opt{symbol_picker_buffer} }
+    execute-keys <c-s>
+    select "%arg{1},%arg{1}"
+}
+
+hook -group symbol-picker global BufSetOption lsp_buffile=.* %{
+    evaluate-commands %sh{
+        [ "$kak_opt_symbol_picker_pending" = true ] && [ "$kak_opt_filetype" = lsp-document-symbol ] && echo symbol-picker-open
+    }
 }
 define-command -override code-hover -docstring 'show hover and diagnostics at the cursor' %{
     try %{ lsp-hover } catch %{ fail 'hover needs kak-lsp' }

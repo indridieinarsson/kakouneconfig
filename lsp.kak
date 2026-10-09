@@ -15,6 +15,8 @@ hook global GlobalSetOption kak_lsp_loaded=true %|
     try %{ set-option global lsp_insert_spaces true }
     set-option global modelinefmt '{{mode_info}} %opt{modeline_git} %val{bufname} %val{cursor_line}:%val{cursor_char_column} {{context_info}} %opt{lsp_modeline} {Error}%opt{lsp_diagnostic_error_count}{Default}/{Information}%opt{lsp_diagnostic_warning_count}'
     source "%val{config}/lsp-servers.kak"
+    # kak-lsp's own S opens a plain *goto* buffer; use the fzf picker like gs.
+    map global lsp S '<esc>: code-symbols<ret>' -docstring 'fuzzy document symbols'
     map global insert <tab> '<a-;>:try lsp-snippets-select-next-placeholders catch %{ execute-keys -with-hooks <lt>tab> }<ret>' -docstring 'next snippet placeholder'
 |
 

@@ -5,7 +5,7 @@
 #
 #   goto (code travel)
 #     gd definition     gr references      gy type      gI implementation
-#     gs symbols        go source/header   gn/gp next/prev diagnostic
+#     gs fzf symbols    go source/header   gn/gp next/prev diagnostic
 #     g[/g] prev/next symbol
 #     ga alternate buffer          <c-o>/<c-i> jump back/forward
 #   normal
